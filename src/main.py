@@ -10,6 +10,7 @@ from src.Board import Board
 from src.InputParser import InputParser
 from src.Move import Move
 from src.Piece import Piece
+import openai
 
 WHITE = True
 BLACK = False
@@ -102,6 +103,7 @@ def printBoard(board: Board) -> None:
     print()
     print(board)
     print()
+    return "\n" + str(board) + "\n"
 
 
 def printGameMoves(history: list[tuple[Move, Optional[Piece]]]) -> None:
@@ -115,6 +117,21 @@ def printGameMoves(history: list[tuple[Move, Optional[Piece]]]) -> None:
 
         print(mv[0].notation, end=' ')
     print()
+
+
+def game_history(history: list[tuple[Move, Optional[Piece]]]) -> str:
+    # list out all the moves in the game
+    game_moves = ""
+    side = "White"
+    for move in history:
+        move = move[0]
+        if side == "White":
+            game_moves += f"White: {move.notation}\n"
+            side = "Black"
+        else:
+            game_moves += f"Black: {move.notation}\n"
+            side = "White"
+    return game_moves
 
 
 def startGame(board: Board, playerSide: bool, ai: AI) -> None:
@@ -169,6 +186,111 @@ def startGame(board: Board, playerSide: bool, ai: AI) -> None:
 
         else:
             print('AI thinking...')
+            move = ai.getBestMove()
+            move.notation = parser.notationForMove(move)
+            makeMove(move, board)
+            printBoard(board)
+
+
+def openAI_move(board, messages):
+    prompt = f"You are a chessGPT, a chess AI, and we are playing chess. Here is the game so far:\n{board}\n Game History:\n{game_history(board.history)}\nYou are White and it's your move. Explain a good move and then finally on a newline, reponse with this specific syntax: `MOVE <a move in short algebraic notation (a3, Nc3, Qxa2, etc)>`. IMPORTANT you must use provide the move in the format `MOVE <move>` on the last line or the game will not work."
+    messages = [{"role": "system", "content": prompt}] + messages
+
+    # # print conversation
+    # for message in messages:
+    #     print(message["content"])
+
+    response_text = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=messages,
+        temperature=0,
+        max_tokens=250,
+    )["choices"][0]["message"]["content"]
+    return response_text
+
+def extract_move(response_text):
+    prompt = f"""The following is a player's thoughts about a chess move to make. Please extract the move they decided to make (e.g. a3, Nc3, Qxa2, etc) and return it and NOTHING else.
+    
+    Examples:
+
+    Input: "I think I should move my queen to a2. MOVE Qxa2"
+    Reponse: "Qxa2"
+    Input: "My rook is in danger. I should move it to a3. MOVE Ra3"
+    Reponse: "Ra3"
+    """
+
+    messages = [{"role": "system", "content": prompt}, {"role": "user", "content": "Input: " + response_text}]
+    response_text = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        temperature=0,
+        max_tokens=250,
+    )["choices"][0]["message"]["content"]
+    if "Response: " in response_text:
+        response_text = response_text.split("Response: ")[1]
+    return response_text
+
+import time
+def startGPT4Game(board: Board, playerSide: bool, ai: AI) -> None:
+    parser = InputParser(board, playerSide)
+    messages = []
+    while True:
+        # sleep for 1 second to avoid rate limiting
+        time.sleep(1)
+        if board.isCheckmate():
+            if board.currentSide == playerSide:
+                print('Checkmate, you lost')
+            else:
+                print('Checkmate! You won!')
+            printGameMoves(board.history)
+            return
+
+        if board.isStalemate():
+            print('Stalemate')
+            printGameMoves(board.history)
+            return
+
+        if board.noMatingMaterial():
+            print('Draw due to no mating material')
+            printGameMoves(board.history)
+            return
+
+        if board.currentSide == playerSide:
+            # printPointAdvantage(board)
+            move = None
+            print("ChessGPT is thinking...")
+            thought = openAI_move(board, messages)
+            time.sleep(1)
+            command = extract_move(openAI_move(board, messages))
+            print(f"ChessGPT: {thought}")
+            if command.lower() == 'u':
+                undoLastTwoMoves(board)
+                printBoard(board)
+                continue
+            elif command.lower() == '?':
+                printCommandOptions()
+                continue
+            elif command.lower() == 'l':
+                printAllLegalMoves(board, parser)
+                continue
+            elif command.lower() == 'gm':
+                printGameMoves(board.history)
+            elif command.lower() == 'r':
+                move = getRandomMove(board, parser)
+            elif command.lower() == 'exit' or command.lower() == 'quit':
+                return
+            try:
+                if move is None:
+                    move = parser.parse(command)
+            except ValueError as error:
+                print('%s' % error)
+                messages = [{"role": "user", "content": f"Note: {error}"}]
+                continue
+            makeMove(move, board)
+            printBoard(board)
+
+        else:
+            print('Opponent chess engine thinking...')
             move = ai.getBestMove()
             move.notation = parser.notationForMove(move)
             makeMove(move, board)
@@ -277,16 +399,17 @@ def main() -> None:
         if args.two:
             twoPlayerGame(board)
         else:
-            playerSide = askForPlayerSide()
+            playerSide = True
             board.currentSide = WHITE
             print()
-            aiDepth = askForDepthOfAI()
+            aiDepth = 2
             opponentAI = AI(board, not playerSide, aiDepth)
             printBoard(board)
-            startGame(board, playerSide, opponentAI)
+            startGPT4Game(board, playerSide, opponentAI)
     except KeyboardInterrupt:
         sys.exit()
 
 
 if __name__ == '__main__':
     main()
+
