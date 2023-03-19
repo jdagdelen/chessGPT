@@ -2,6 +2,8 @@
 
 A modified version of [command-line-chess](https://github.com/marcusbuffett/command-line-chess) that allows you to watch GPT-4 play against a basic chess engine. 
 
+![](https://github.com/jdagdelen/ChessGPT/chess3.gif)
+
 
 ## Installation
 
