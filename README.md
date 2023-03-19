@@ -1,4 +1,27 @@
-[![Run on Repl.it](https://repl.it/badge/github/marcusbuffett/command-line-chess)](https://repl.it/github/marcusbuffett/command-line-chess)
+# ChessGPT
+
+A modified version of [command-line-chess](https://github.com/marcusbuffett/command-line-chess) that allows you to watch GPT-4 play against a basic chess engine. 
+
+
+## Installation
+
+To install, clone this repo and then use:
+
+```
+pip install -e chessGPT
+```
+
+## Watch an AI-vs-AI game
+
+To start a game, use:
+
+```
+python src/main.py
+```
+
+Warning: This is a hacky code I put together in an hour. Don't expect it to be robust or even good. 
+
+Original docs:
 
 # command-line-chess
 
